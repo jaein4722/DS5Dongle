@@ -6,6 +6,7 @@ on:
       - master
     paths:
       - ".github/upstream-release.json"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -70,22 +71,27 @@ jobs:
           if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "Reusing existing release $CUSTOM_TAG."
           else
+            upstream_url="https://github.com/awalol/DS5Dongle/releases/tag/$UPSTREAM_TAG"
             gh release create "$CUSTOM_TAG" \
               --repo "${{ github.repository }}" \
               --title "$CUSTOM_TAG" \
-              --notes "Automated custom firmware build based on upstream DS5Dongle $UPSTREAM_TAG with the custom UF2 bootloader command."
+              --notes "Automated custom firmware build based on upstream DS5Dongle $UPSTREAM_TAG with the custom UF2 bootloader command.
+
+Upstream release and changelog: $upstream_url"
           fi
           echo "skipped=false" >> "$GITHUB_OUTPUT"
 
   build:
-    name: Build and upload synced UF2
+    name: Build and upload patched upstream UF2
     needs: prepare
     if: needs.prepare.outputs.skipped != 'true'
     uses: ./.github/workflows/build-firmware.yml
     with:
-      ref: ${{ needs.prepare.outputs.custom_tag }}
+      repo: awalol/DS5Dongle
+      ref: ${{ needs.prepare.outputs.upstream_tag }}
       version: ${{ needs.prepare.outputs.custom_tag }}
       asset_suffix: -${{ needs.prepare.outputs.custom_tag }}
       upload_tag: ${{ needs.prepare.outputs.custom_tag }}
       picow: true
       no_batt_led_check: false
+      patch_bootloader: true

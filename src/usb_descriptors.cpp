@@ -362,8 +362,8 @@ uint8_t descriptor_configuration[] = {
     0x00, // bCountryCode: Not localized
     0x01, // bNumDescriptors: 1 report descriptor
     0x22, // bDescriptorType: Report
-    0x49, 0x01, // wDescriptorLength: 329 (0x0149) DS
-    // 0xBD, 0x01, // wDescriptorLength: 445 (0x01BD) DSE
+    0x41, 0x01, // wDescriptorLength: 321 (0x0141) DS
+    // 0xB5, 0x01, // wDescriptorLength: 437 (0x01B5) DSE
 
     // Endpoint Descriptor (HID IN: EP4)
     0x07, // bLength
@@ -408,9 +408,9 @@ uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
     descriptor_configuration[offset - 1] = bInterval;
     descriptor_configuration[offset - 8] = bInterval;
     if (ds_mode()) {
-        descriptor_configuration[offset - 16] = 0x49;
+        descriptor_configuration[offset - 16] = 0x41;
     }else {
-        descriptor_configuration[offset - 16] = 0xBD;
+        descriptor_configuration[offset - 16] = 0xB5;
     }
     return descriptor_configuration;
 }
@@ -577,14 +577,10 @@ uint8_t const desc_hid_report_ds[] = {
     0x09, 0x3A, //   Usage (Vendor 0x3A)
     0x95, 0x3F, //   Report Count (63)
     0xB1, 0x02, //   Feature (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
-    0x85, 0xFA, //   Report ID (-6)
-    0x09, 0x3B, //   Usage (Vendor 0x3B)
-    0x95, 0x3F, //   Report Count (63)
-    0xB1, 0x02, //   Feature (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
     0xC0, // End Collection
-    // 329 bytes
+    // 321 bytes
 };
-static_assert(sizeof(desc_hid_report_ds) == 0x0149);
+static_assert(sizeof(desc_hid_report_ds) == 0x0141);
 
 uint8_t const desc_hid_report_dse[] = {
     0x05, 0x01, // Usage Page (Generic Desktop Ctrls)
@@ -802,14 +798,10 @@ uint8_t const desc_hid_report_dse[] = {
     0x09, 0x3A, //   Usage (Vendor 0x3A)
     0x95, 0x3F, //   Report Count (63)
     0xB1, 0x02, //   Feature (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
-    0x85, 0xFA, //   Report ID (-6)
-    0x09, 0x3B, //   Usage (Vendor 0x3B)
-    0x95, 0x3F, //   Report Count (63)
-    0xB1, 0x02, //   Feature (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null Position,Non-volatile)
     0xC0, // End Collection
-    // 445 bytes
+    // 437 bytes
 };
-static_assert(sizeof(desc_hid_report_dse) == 0x01BD);
+static_assert(sizeof(desc_hid_report_dse) == 0x01B5);
 
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor

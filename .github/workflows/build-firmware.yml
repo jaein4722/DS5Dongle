@@ -43,6 +43,11 @@ on:
         required: false
         type: boolean
         default: false
+      patch_bootloader:
+        description: Apply the fork's UF2 bootloader command patch before building
+        required: false
+        type: boolean
+        default: false
 
 env:
   PICO_SDK_REF: 2.2.0
@@ -71,6 +76,25 @@ jobs:
           repository: ${{ inputs.repo == '' && github.repository || inputs.repo }}
           ref: ${{ inputs.ref }}
           submodules: recursive
+
+      - name: Checkout fork patch tools
+        if: inputs.patch_bootloader
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+          path: _fork-tools
+          sparse-checkout: tools/apply-bootloader-command.py
+          sparse-checkout-cone-mode: false
+
+      - name: Apply UF2 bootloader patch
+        if: inputs.patch_bootloader
+        run: |
+          python3 _fork-tools/tools/apply-bootloader-command.py
+          if git diff --quiet -- src/cmd.cpp; then
+            echo "Bootloader patch did not modify src/cmd.cpp. Upstream may already include it or cmd.cpp changed unexpectedly." >&2
+            exit 1
+          fi
 
       - name: Resolve firmware version
         env:
