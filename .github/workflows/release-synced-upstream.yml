@@ -66,7 +66,7 @@ jobs:
           gh release create "$CUSTOM_TAG" \
             --repo "${{ github.repository }}" \
             --title "$CUSTOM_TAG" \
-            --notes "Automated custom firmware build based on upstream DS5Dongle $UPSTREAM_TAG with the tray UF2 bootloader command."
+            --notes "Automated custom firmware build based on upstream DS5Dongle $UPSTREAM_TAG with the custom UF2 bootloader command."
           echo "skipped=false" >> "$GITHUB_OUTPUT"
 
   build:

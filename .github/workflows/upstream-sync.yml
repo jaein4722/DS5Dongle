@@ -46,7 +46,7 @@ jobs:
             echo "Could not resolve upstream tag." >&2
             exit 1
           fi
-          custom_tag="${upstream_tag}-tray.1"
+          custom_tag="${upstream_tag}-custom.1"
           safe_tag="$(printf '%s' "$custom_tag" | tr -c 'A-Za-z0-9._-' '-')"
           branch="automation/upstream-${safe_tag}"
           echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
@@ -113,7 +113,7 @@ jobs:
           EOF
 
           git add .github tools/apply-bootloader-command.py src/cmd.cpp
-          git commit -m "Sync upstream $UPSTREAM_TAG with tray bootloader patch"
+          git commit -m "Sync upstream $UPSTREAM_TAG with custom bootloader patch"
           git push --force-with-lease origin "$BRANCH"
 
       - name: Set result
@@ -158,9 +158,9 @@ jobs:
             --state open \
             --json number \
             --jq '.[0].number // empty')"
-          title="Sync upstream $UPSTREAM_TAG with tray bootloader patch"
+          title="Sync upstream $UPSTREAM_TAG with custom bootloader patch"
           body="$(cat <<EOF
-          This automated PR syncs upstream DS5Dongle $UPSTREAM_TAG and reapplies the tray firmware extension:
+          This automated PR syncs upstream DS5Dongle $UPSTREAM_TAG and reapplies the custom firmware extension:
 
           - Adds the custom \`0xF6 + 0x04\` UF2 bootloader command.
           - Records release metadata for \`$CUSTOM_TAG\`.
