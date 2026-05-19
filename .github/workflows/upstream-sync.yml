@@ -1,0 +1,181 @@
+name: Sync upstream release
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_tag:
+        description: Upstream DS5Dongle tag to sync. Empty = latest release.
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  prepare:
+    name: Prepare sync branch
+    runs-on: ubuntu-latest
+    outputs:
+      skipped: ${{ steps.result.outputs.skipped }}
+      branch: ${{ steps.result.outputs.branch }}
+      upstream_tag: ${{ steps.result.outputs.upstream_tag }}
+      custom_tag: ${{ steps.result.outputs.custom_tag }}
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          submodules: false
+
+      - name: Resolve upstream release
+        id: resolve
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INPUT_UPSTREAM_TAG: ${{ github.event.inputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          upstream_tag="$INPUT_UPSTREAM_TAG"
+          if [ -z "$upstream_tag" ]; then
+            upstream_tag="$(gh api repos/awalol/DS5Dongle/releases/latest --jq .tag_name)"
+          fi
+          if [ -z "$upstream_tag" ]; then
+            echo "Could not resolve upstream tag." >&2
+            exit 1
+          fi
+          custom_tag="${upstream_tag}-tray.1"
+          safe_tag="$(printf '%s' "$custom_tag" | tr -c 'A-Za-z0-9._-' '-')"
+          branch="automation/upstream-${safe_tag}"
+          echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+          echo "custom_tag=$custom_tag" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+
+      - name: Stop if custom release already exists
+        id: existing
+        env:
+          CUSTOM_TAG: ${{ steps.resolve.outputs.custom_tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$CUSTOM_TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+
+      - name: Save fork automation files
+        if: steps.existing.outputs.exists != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fork-automation"
+          cp -R .github "$RUNNER_TEMP/fork-automation/.github"
+          mkdir -p "$RUNNER_TEMP/fork-automation/tools"
+          cp tools/apply-bootloader-command.py "$RUNNER_TEMP/fork-automation/tools/apply-bootloader-command.py"
+
+      - name: Create upstream-based branch
+        if: steps.existing.outputs.exists != 'true'
+        env:
+          UPSTREAM_TAG: ${{ steps.resolve.outputs.upstream_tag }}
+          CUSTOM_TAG: ${{ steps.resolve.outputs.custom_tag }}
+          BRANCH: ${{ steps.resolve.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/awalol/DS5Dongle.git
+          git fetch --tags upstream
+          git switch --force-create "$BRANCH"
+          git rm -r --quiet .
+          git checkout "refs/tags/$UPSTREAM_TAG" -- .
+
+          mkdir -p .github tools
+          cp -R "$RUNNER_TEMP/fork-automation/.github/." .github/
+          cp "$RUNNER_TEMP/fork-automation/tools/apply-bootloader-command.py" tools/apply-bootloader-command.py
+          python3 tools/apply-bootloader-command.py
+
+          cat > .github/upstream-release.json <<EOF
+          {
+            "upstream_repository": "awalol/DS5Dongle",
+            "upstream_tag": "$UPSTREAM_TAG",
+            "custom_tag": "$CUSTOM_TAG",
+            "patch_revision": 1,
+            "patches": [
+              "uf2-bootloader-command"
+            ]
+          }
+          EOF
+
+          git add .github tools/apply-bootloader-command.py src/cmd.cpp
+          git commit -m "Sync upstream $UPSTREAM_TAG with tray bootloader patch"
+          git push --force-with-lease origin "$BRANCH"
+
+      - name: Set result
+        id: result
+        run: |
+          echo "skipped=${{ steps.existing.outputs.exists }}" >> "$GITHUB_OUTPUT"
+          echo "branch=${{ steps.resolve.outputs.branch }}" >> "$GITHUB_OUTPUT"
+          echo "upstream_tag=${{ steps.resolve.outputs.upstream_tag }}" >> "$GITHUB_OUTPUT"
+          echo "custom_tag=${{ steps.resolve.outputs.custom_tag }}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build sync branch
+    needs: prepare
+    if: needs.prepare.outputs.skipped != 'true'
+    uses: ./.github/workflows/build-firmware.yml
+    with:
+      ref: ${{ needs.prepare.outputs.branch }}
+      version: ${{ needs.prepare.outputs.custom_tag }}
+      asset_suffix: -${{ needs.prepare.outputs.custom_tag }}
+      picow: true
+      no_batt_led_check: false
+
+  pull-request:
+    name: Open pull request
+    needs:
+      - prepare
+      - build
+    if: needs.prepare.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ needs.prepare.outputs.branch }}
+          UPSTREAM_TAG: ${{ needs.prepare.outputs.upstream_tag }}
+          CUSTOM_TAG: ${{ needs.prepare.outputs.custom_tag }}
+        run: |
+          set -euo pipefail
+          pr_number="$(gh pr list \
+            --repo "${{ github.repository }}" \
+            --head "$BRANCH" \
+            --state open \
+            --json number \
+            --jq '.[0].number // empty')"
+          title="Sync upstream $UPSTREAM_TAG with tray bootloader patch"
+          body="$(cat <<EOF
+          This automated PR syncs upstream DS5Dongle $UPSTREAM_TAG and reapplies the tray firmware extension:
+
+          - Adds the custom \`0xF6 + 0x04\` UF2 bootloader command.
+          - Records release metadata for \`$CUSTOM_TAG\`.
+          - Builds the generated branch before opening this PR.
+
+          After this PR is merged, the release workflow creates tag \`$CUSTOM_TAG\` and uploads UF2 assets automatically.
+          EOF
+          )"
+          if [ -n "$pr_number" ]; then
+            gh pr edit "$pr_number" --repo "${{ github.repository }}" --title "$title" --body "$body"
+          else
+            gh pr create \
+              --repo "${{ github.repository }}" \
+              --head "$BRANCH" \
+              --base master \
+              --title "$title" \
+              --body "$body"
+          fi

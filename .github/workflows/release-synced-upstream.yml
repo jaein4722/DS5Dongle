@@ -1,0 +1,83 @@
+name: Release synced upstream firmware
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/upstream-release.json"
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    name: Prepare release tag
+    runs-on: ubuntu-latest
+    outputs:
+      skipped: ${{ steps.result.outputs.skipped }}
+      upstream_tag: ${{ steps.meta.outputs.upstream_tag }}
+      custom_tag: ${{ steps.meta.outputs.custom_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Read sync metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          upstream_tag="$(jq -r .upstream_tag .github/upstream-release.json)"
+          custom_tag="$(jq -r .custom_tag .github/upstream-release.json)"
+          if [ -z "$upstream_tag" ] || [ "$upstream_tag" = "null" ]; then
+            echo "Missing upstream_tag." >&2
+            exit 1
+          fi
+          if [ -z "$custom_tag" ] || [ "$custom_tag" = "null" ]; then
+            echo "Missing custom_tag." >&2
+            exit 1
+          fi
+          echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+          echo "custom_tag=$custom_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and release
+        id: result
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CUSTOM_TAG: ${{ steps.meta.outputs.custom_tag }}
+          UPSTREAM_TAG: ${{ steps.meta.outputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $CUSTOM_TAG already exists."
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --tags origin "refs/tags/$CUSTOM_TAG" >/dev/null 2>&1; then
+            echo "Tag $CUSTOM_TAG already exists; using it for release."
+          else
+            git tag "$CUSTOM_TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$CUSTOM_TAG"
+          fi
+          gh release create "$CUSTOM_TAG" \
+            --repo "${{ github.repository }}" \
+            --title "$CUSTOM_TAG" \
+            --notes "Automated custom firmware build based on upstream DS5Dongle $UPSTREAM_TAG with the tray UF2 bootloader command."
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and upload synced UF2
+    needs: prepare
+    if: needs.prepare.outputs.skipped != 'true'
+    uses: ./.github/workflows/build-firmware.yml
+    with:
+      ref: ${{ needs.prepare.outputs.custom_tag }}
+      version: ${{ needs.prepare.outputs.custom_tag }}
+      asset_suffix: -${{ needs.prepare.outputs.custom_tag }}
+      upload_tag: ${{ needs.prepare.outputs.custom_tag }}
+      picow: true
+      no_batt_led_check: false
