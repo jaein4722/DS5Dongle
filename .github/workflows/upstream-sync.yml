@@ -26,7 +26,7 @@ jobs:
       custom_tag: ${{ steps.result.outputs.custom_tag }}
     steps:
       - name: Checkout fork
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: false
@@ -77,7 +77,12 @@ jobs:
           mkdir -p "$RUNNER_TEMP/fork-automation"
           cp -R .github "$RUNNER_TEMP/fork-automation/.github"
           mkdir -p "$RUNNER_TEMP/fork-automation/tools"
+          test -f tools/apply-bootloader-command.py
           cp tools/apply-bootloader-command.py "$RUNNER_TEMP/fork-automation/tools/apply-bootloader-command.py"
+          test -f "$RUNNER_TEMP/fork-automation/.github/workflows/upstream-sync.yml"
+          test -f "$RUNNER_TEMP/fork-automation/.github/workflows/release-synced-upstream.yml"
+          test -f "$RUNNER_TEMP/fork-automation/.github/workflows/build-firmware.yml"
+          test -f "$RUNNER_TEMP/fork-automation/tools/apply-bootloader-command.py"
 
       - name: Create upstream-based branch
         if: steps.existing.outputs.exists != 'true'
@@ -99,6 +104,10 @@ jobs:
           cp -R "$RUNNER_TEMP/fork-automation/.github/." .github/
           cp "$RUNNER_TEMP/fork-automation/tools/apply-bootloader-command.py" tools/apply-bootloader-command.py
           python3 tools/apply-bootloader-command.py
+          if git diff --quiet -- src/cmd.cpp; then
+            echo "Bootloader patch did not modify src/cmd.cpp. Upstream may already include it or cmd.cpp changed unexpectedly." >&2
+            exit 1
+          fi
 
           cat > .github/upstream-release.json <<EOF
           {
@@ -154,7 +163,7 @@ jobs:
           set -euo pipefail
           pr_number="$(gh pr list \
             --repo "${{ github.repository }}" \
-            --head "$BRANCH" \
+            --head "${{ github.repository_owner }}:$BRANCH" \
             --state open \
             --json number \
             --jq '.[0].number // empty')"
