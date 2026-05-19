@@ -12,5 +12,4 @@ jobs:
     uses: ./.github/workflows/build-firmware.yml
     with:
       version: ${{ github.sha }}   # reusable build shortens a full SHA to 7
-      picow: true
       no_batt_led_check: true
