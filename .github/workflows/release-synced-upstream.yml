@@ -1,11 +1,6 @@
 name: Release synced upstream firmware
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - ".github/upstream-release.json"
   workflow_dispatch:
 
 permissions:
