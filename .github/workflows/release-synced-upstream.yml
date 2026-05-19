@@ -11,7 +11,7 @@ jobs:
     name: Prepare release tag
     runs-on: ubuntu-latest
     outputs:
-      skipped: ${{ steps.result.outputs.skipped }}
+      skipped: ${{ steps.meta.outputs.skipped }}
       upstream_tag: ${{ steps.meta.outputs.upstream_tag }}
       custom_tag: ${{ steps.meta.outputs.custom_tag }}
     steps:
@@ -20,15 +20,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Read sync metadata
+      - name: Read metadata and release state
         id: meta
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [ ! -f .github/upstream-release.json ]; then
             echo "No .github/upstream-release.json found; nothing to release."
-            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "skipped=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
           upstream_tag="$(jq -r .upstream_tag .github/upstream-release.json)"
           custom_tag="$(jq -r .custom_tag .github/upstream-release.json)"
           if [ -z "$upstream_tag" ] || [ "$upstream_tag" = "null" ]; then
@@ -39,57 +42,49 @@ jobs:
             echo "Missing custom_tag." >&2
             exit 1
           fi
-          echo "available=true" >> "$GITHUB_OUTPUT"
+
           echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
           echo "custom_tag=$custom_tag" >> "$GITHUB_OUTPUT"
 
-      - name: Prepare tag and release
-        id: release
-        if: steps.meta.outputs.available == 'true'
+          if gh release view "$custom_tag" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            if gh release view "$custom_tag" --repo "${{ github.repository }}" --json assets \
+              | jq -e '.assets[] | select(.name | endswith(".uf2"))' >/dev/null; then
+              echo "Release $custom_tag already exists with UF2 assets."
+              echo "skipped=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Release $custom_tag exists but UF2 assets are missing; continuing build/upload."
+          fi
+
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure tag and release
+        if: steps.meta.outputs.skipped != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           CUSTOM_TAG: ${{ steps.meta.outputs.custom_tag }}
           UPSTREAM_TAG: ${{ steps.meta.outputs.upstream_tag }}
         run: |
           set -euo pipefail
-          if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
-            if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" --json assets \
-              | jq -e '.assets[] | select(.name | endswith(".uf2"))' >/dev/null; then
-              echo "Release $CUSTOM_TAG already exists with UF2 assets."
-              echo "skipped=true" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-            echo "Release $CUSTOM_TAG exists but UF2 assets are missing; continuing build/upload."
-          fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           if git ls-remote --exit-code --tags origin "refs/tags/$CUSTOM_TAG" >/dev/null 2>&1; then
             echo "Tag $CUSTOM_TAG already exists; using it for release."
           else
             git tag "$CUSTOM_TAG" "$GITHUB_SHA"
             git push origin "refs/tags/$CUSTOM_TAG"
           fi
+
           if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "Reusing existing release $CUSTOM_TAG."
           else
             upstream_url="https://github.com/awalol/DS5Dongle/releases/tag/$UPSTREAM_TAG"
+            notes="Automated custom firmware build based on upstream DS5Dongle $UPSTREAM_TAG with the custom UF2 bootloader command. Upstream release and changelog: $upstream_url"
             gh release create "$CUSTOM_TAG" \
               --repo "${{ github.repository }}" \
               --title "$CUSTOM_TAG" \
-              --notes "Automated custom firmware build based on upstream DS5Dongle $UPSTREAM_TAG with the custom UF2 bootloader command.
-
-Upstream release and changelog: $upstream_url"
-          fi
-          echo "skipped=false" >> "$GITHUB_OUTPUT"
-
-      - name: Set result
-        id: result
-        run: |
-          if [ "${{ steps.meta.outputs.available }}" != "true" ]; then
-            echo "skipped=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "skipped=${{ steps.release.outputs.skipped }}" >> "$GITHUB_OUTPUT"
+              --notes "$notes"
           fi
 
   build:
