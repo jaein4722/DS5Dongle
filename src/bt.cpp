@@ -14,7 +14,6 @@
 #include "pico/cyw43_arch.h"
 #include "utils.h"
 #include "bsp/board_api.h"
-#include "battery_status.h"
 #include "classic/sdp_server.h"
 #include "config.h"
 #include "state_mgr.h"
@@ -346,7 +345,6 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
             hid_interrupt_cid = 0;
             feature_data.clear();
             cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, false);
-            battery_status_on_disconnect();
 #if ENABLE_BATT_LED
             battery_led_on_disconnect();
 #endif

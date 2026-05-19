@@ -18,7 +18,6 @@
 #endif
 #include "config.h"
 #include "cmd.h"
-#include "battery_status.h"
 #if ENABLE_BATT_LED
 #include "battery_led.h"
 #endif
@@ -91,7 +90,6 @@ void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
 
         if (get_config().polling_rate_mode != 2) {
             memcpy(interrupt_in_data, data + 3, 63);
-            battery_status_update(data + 3, 63);
 #if ENABLE_BATT_LED
             battery_led_note_report();
 #endif
@@ -108,7 +106,6 @@ void on_bt_data(CHANNEL_TYPE channel, uint8_t *data, uint16_t len) {
         memcpy(interrupt_in_data, data + 3, 63);
         report_dirty = true;
         critical_section_exit(&report_cs);
-        battery_status_update(data + 3, 63);
 #if ENABLE_BATT_LED
         battery_led_note_report();
 #endif
@@ -227,7 +224,6 @@ int main() {
 #if ENABLE_BATT_LED
     battery_led_init();
 #endif
-    battery_status_init();
 
 #if !ENABLE_SERIAL
     if (watchdog_caused_reboot()) {

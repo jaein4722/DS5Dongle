@@ -88,7 +88,6 @@ add_executable(ds5-bridge
         src/config.cpp
         src/cmd.cpp
         src/state_mgr.cpp
-        src/battery_status.cpp
 )
 
 if (ENABLE_BATT_LED)

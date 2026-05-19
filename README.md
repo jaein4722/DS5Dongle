@@ -6,7 +6,7 @@ This repository is a lightly modified fork of the [original DS5Dongle project](h
 
 > This fork is maintained for use with my custom Windows companion app, [DS5DongleTray](https://github.com/jaein4722/DS5DongleTray). Feel free to check it out if you are interested.
 >
-> Added experimental host-tool extensions: `0xFA` battery status reporting and `0xF6 + 0x04` reboot-to-BOOTSEL support.
+> Added experimental host-tool support for tray-assisted firmware updates using `0xF6 + 0x04` reboot-to-BOOTSEL.
 
 ## Overview
 
