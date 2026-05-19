@@ -214,5 +214,7 @@ jobs:
         run: |
           # Pin to the workflow's own repo: when inputs.repo is set we checked
           # out a different repo, so the local git remote must not decide this.
-          gh release upload "${{ inputs.upload_tag }}" artifacts/*.uf2 \
+          gh release upload "${{ inputs.upload_tag }}" \
+            "artifacts/ds5-bridge${{ inputs.asset_suffix }}.uf2" \
+            "artifacts/ds5-bridge-debug${{ inputs.asset_suffix }}.uf2" \
             --repo "${{ github.repository }}" --clobber

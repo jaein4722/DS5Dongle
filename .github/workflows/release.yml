@@ -57,4 +57,5 @@ jobs:
       version: ${{ needs.create-release.outputs.tag }}
       asset_suffix: -${{ needs.create-release.outputs.tag }}
       upload_tag: ${{ needs.create-release.outputs.tag }}
+      picow: true
       no_batt_led_check: true
