@@ -2,7 +2,11 @@
 
 [中文](./README.CN.md)
 
-> Turn a Raspberry Pi Pico2W into a wireless adapter for the DualSense (DS5) controller.
+This repository is a lightly modified fork of the [original DS5Dongle project](https://github.com/awalol/DS5Dongle).
+
+> This fork is maintained for use with my custom Windows companion app, [DS5DongleTray](https://github.com/jaein4722/DS5DongleTray). Feel free to check it out if you are interested.
+>
+> Added experimental host-tool extensions: `0xFA` battery status reporting and `0xF6 + 0x04` reboot-to-BOOTSEL support.
 
 ## Overview
 
@@ -132,11 +136,7 @@ i.e. ***Update TinyUSB in the Pico SDK to the latest version***
 2. Compile using standard Pico SDK toolchain
 
 
-## Roadmap
-- Please check out [DS5Dongle plan](https://github.com/users/awalol/projects/5)
-
 ## Community
-- Join the Discord server: [Discord Server](https://discord.gg/hM4ntchGCa)
 - If you have a bug, please open an issue instead.
 
 ## References
