@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: write
-  actions: write
 
 jobs:
   prepare:
@@ -117,6 +116,75 @@ jobs:
             git push origin HEAD:master
           fi
 
-          gh workflow run release-synced-upstream.yml \
-            --repo "${{ github.repository }}" \
-            --ref master
+  release:
+    name: Prepare release
+    needs:
+      - prepare
+      - update-metadata
+    if: needs.prepare.outputs.skipped != 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      skipped: ${{ steps.release.outputs.skipped }}
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          fetch-depth: 0
+          submodules: false
+
+      - name: Ensure tag and release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CUSTOM_TAG: ${{ needs.prepare.outputs.custom_tag }}
+          UPSTREAM_TAG: ${{ needs.prepare.outputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" --json assets \
+              | jq -e '.assets[] | select(.name | endswith(".uf2"))' >/dev/null; then
+              echo "Release $CUSTOM_TAG already exists with UF2 assets."
+              echo "skipped=true" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Release $CUSTOM_TAG exists but UF2 assets are missing; continuing build/upload."
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --tags origin "refs/tags/$CUSTOM_TAG" >/dev/null 2>&1; then
+            echo "Tag $CUSTOM_TAG already exists; using it for release."
+          else
+            git tag "$CUSTOM_TAG" "$GITHUB_SHA"
+            git push origin "refs/tags/$CUSTOM_TAG"
+          fi
+
+          if gh release view "$CUSTOM_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Reusing existing release $CUSTOM_TAG."
+          else
+            upstream_url="https://github.com/awalol/DS5Dongle/releases/tag/$UPSTREAM_TAG"
+            notes="Automated custom firmware build based on upstream DS5Dongle $UPSTREAM_TAG with the custom UF2 bootloader command. Upstream release and changelog: $upstream_url"
+            gh release create "$CUSTOM_TAG" \
+              --repo "${{ github.repository }}" \
+              --title "$CUSTOM_TAG" \
+              --notes "$notes"
+          fi
+          echo "skipped=false" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build and upload patched upstream UF2
+    needs:
+      - prepare
+      - release
+    if: needs.prepare.outputs.skipped != 'true' && needs.release.outputs.skipped != 'true'
+    uses: ./.github/workflows/build-firmware.yml
+    with:
+      repo: awalol/DS5Dongle
+      ref: ${{ needs.prepare.outputs.upstream_tag }}
+      version: ${{ needs.prepare.outputs.custom_tag }}
+      asset_suffix: -${{ needs.prepare.outputs.custom_tag }}
+      upload_tag: ${{ needs.prepare.outputs.custom_tag }}
+      picow: true
+      no_batt_led_check: false
+      patch_bootloader: true
