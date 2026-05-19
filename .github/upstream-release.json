@@ -1,0 +1,9 @@
+{
+  "upstream_repository": "awalol/DS5Dongle",
+  "upstream_tag": "v0.6.0-hotfix",
+  "custom_tag": "v0.6.0-hotfix-custom.1",
+  "patch_revision": 1,
+  "patches": [
+    "uf2-bootloader-command"
+  ]
+}
