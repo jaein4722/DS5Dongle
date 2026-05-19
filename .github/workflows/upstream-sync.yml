@@ -73,25 +73,9 @@ jobs:
           echo "upstream_tag=${{ steps.resolve.outputs.upstream_tag }}" >> "$GITHUB_OUTPUT"
           echo "custom_tag=${{ steps.resolve.outputs.custom_tag }}" >> "$GITHUB_OUTPUT"
 
-  build:
-    name: Build patched upstream release
-    needs: prepare
-    if: needs.prepare.outputs.skipped != 'true'
-    uses: ./.github/workflows/build-firmware.yml
-    with:
-      repo: awalol/DS5Dongle
-      ref: ${{ needs.prepare.outputs.upstream_tag }}
-      version: ${{ needs.prepare.outputs.custom_tag }}
-      asset_suffix: -${{ needs.prepare.outputs.custom_tag }}
-      picow: true
-      no_batt_led_check: false
-      patch_bootloader: true
-
   update-metadata:
     name: Update release metadata
-    needs:
-      - prepare
-      - build
+    needs: prepare
     if: needs.prepare.outputs.skipped != 'true'
     runs-on: ubuntu-latest
     steps:
